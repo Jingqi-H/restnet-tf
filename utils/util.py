@@ -1,6 +1,11 @@
 import os
 
 
+def s2t(s):
+    m, s = divmod(s, 60)
+    h, m = divmod(m, 60)
+    return h, m, s
+
 def gain_index(k, seg, total_size, indices):
     """
     tr:train,val:valid; r:right,l:left;  eg: trrr: right index of right side train subset

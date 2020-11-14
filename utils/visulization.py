@@ -10,7 +10,7 @@ def plot_pd(train_df, val_df):
     df:验证分数，DataFrame
     """
 
-    fig, axes = plt.subplots(3, 2, figsize=(7, 7), sharex=True)
+    fig, axes = plt.subplots(3, 2, figsize=(7, 7))
     ax1 = axes[0, 0]
     ax2 = axes[0, 1]
     ax3 = axes[1, 0]
@@ -46,12 +46,12 @@ def plot_pd(train_df, val_df):
     ax6.set_ylabel('F1')
 
     plt.show()
-    return fig
+    # return fig
 
 if __name__ == '__main__':
 
-    val_root = '/home/huangjq/PyCharmCode/4_project/6_ResNet/5_ResNetTF34/result/1104/main3.1/K3ValScore.csv'
-    train_root = '/home/huangjq/PyCharmCode/4_project/6_ResNet/5_ResNetTF34/result/1104/main3.1/K3TrainScore.csv'
+    val_root = '/home/huangjq/PyCharmCode/4_project/6_ResNet/5_ResNetTF34/result/1112Lr1e-6wh_300-900/main3.2/K3ValScore.csv'
+    train_root = '/home/huangjq/PyCharmCode/4_project/6_ResNet/5_ResNetTF34/result/1112Lr1e-6wh_300-900/main3.2/K3TrainScore.csv'
     train_file = pd.read_csv(train_root, encoding='gbk')
     val_file = pd.read_csv(val_root, encoding='gbk')
     f = plot_pd(train_file, val_file)

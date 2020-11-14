@@ -4,7 +4,7 @@
 
 有数据增强，加了dropout
 
-相对于其他main，加了学习率衰减，这里改了train，如果其他main要训练的话，他们也需要改学习率衰减
+相对于其他main，加了学习率衰减
 """
 
 import os
@@ -20,7 +20,7 @@ import matplotlib.pyplot as plt
 from train import train
 from config import configs
 from models.model import resnet34, resnet101
-from utils.util import gain_index, mkfile
+from utils.util import gain_index, mkfile, s2t
 from utils.visulization import plot_pd
 from validate import eval
 
@@ -50,6 +50,9 @@ def cross_valid(
     # print(indices)
     kfold_result = pd.DataFrame(columns=('Accurate', 'Recall', 'Precision', 'AUC', 'F1'))
 
+    save_model = os.path.join('checkpoints', date)
+    mkfile(save_model)
+
     for i in range(k_fold):
 
         ################# 用迁移学习，改这个模块 ########################
@@ -60,7 +63,7 @@ def cross_valid(
             param.requires_grad = False
 
         for p in net.layer2.parameters():  # 将fine-tuning 的参数的 requires_grad 设置为 True
-            p.requires_grad = True
+            p.requires_grad = False
             optim_param.append(p)
         for p in net.layer3.parameters():  # 将fine-tuning 的参数的 requires_grad 设置为 True
             p.requires_grad = True
@@ -69,12 +72,17 @@ def cross_valid(
             p.requires_grad = True
             optim_param.append(p)
 
-        inchannel = net.fc.in_features
+        inchannel = net.fc.in_features  # inchannel=512
         net.fc = nn.Sequential(
             nn.Linear(inchannel, 256),
+            nn.BatchNorm1d(256),
             nn.ReLU(),
-            nn.Dropout(0.4),
-            nn.Linear(256, num_classes),
+            nn.Dropout(0.5),
+            nn.Linear(256, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(64, num_classes),
         )
         net.cuda()
 
@@ -90,8 +98,7 @@ def cross_valid(
         #                        nesterov=True, )  # 使用Nesterov动量，默认为False
 
         optimizers = optim.Adam(optim_param, lr=learning_rate, weight_decay=weight_decay)
-        # 在当前数据集下，每经过?个epoch，会衰减一次，lr=lr*gamma
-        scheduler = optim.lr_scheduler.StepLR(optimizers, step_size=500, gamma=0.99995)
+        # scheduler = optim.lr_scheduler.StepLR(optimizers, step_size=100, gamma=0.8)
 
         train_result = pd.DataFrame(columns=('Loss', 'Accurate'))
         val_result = pd.DataFrame(columns=('Loss', 'Accurate', 'Recall', 'Precision', 'AUC', 'F1'))
@@ -117,9 +124,6 @@ def cross_valid(
                                             sampler=valid_sampler,
                                             drop_last=True,
                                             num_workers=4)
-
-        save_model = os.path.join('checkpoints', date)
-        mkfile(save_model)
 
         for epoch in range(num_epoch):
             print('\nF{} | Epoch {}/{}'.format(i + 1, epoch + 1, num_epoch))
@@ -150,15 +154,16 @@ def cross_valid(
                                                          'AUC': [auc],
                                                          'F1': [f1]}), ignore_index=True)
 
-            if (epoch + 1) % 300 == 0:
-                torch.save(net.state_dict(), os.path.join(save_model, 'K' + str(i+1) + 'CP' + str(epoch + 1) + '.pth'))
+            if (epoch + 1) % 500 == 0:
+                torch.save(net.state_dict(),
+                           os.path.join(save_model, 'K' + str(i + 1) + 'CP' + str(epoch + 1) + '.pth'))
                 print("Save epoch {}!".format(epoch + 1))
 
         kfold_result = kfold_result.append(pd.DataFrame({'Accurate': [val_acc],
-                                                       'Recall': [recall],
-                                                       'Precision': [precision],
-                                                       'AUC': [auc],
-                                                       'F1': [f1]}), ignore_index=True)
+                                                         'Recall': [recall],
+                                                         'Precision': [precision],
+                                                         'AUC': [auc],
+                                                         'F1': [f1]}), ignore_index=True)
 
         save_dir = os.path.join(os.path.join('./result', date), 'main3.2')
         mkfile(save_dir)
@@ -174,14 +179,21 @@ def cross_valid(
 
 if __name__ == '__main__':
     opt = configs()
+    start_time = time.time()
     print("start time:", time.asctime(time.localtime(time.time())))
     print('I am Tf3.2 with  on data with strip. / lr={} / wd={}.'.format(opt.lr, opt.weight_decay))
     data_transform = transforms.Compose([
-        transforms.RandomResizedCrop(224, scale=(0.2, 1), ratio=(0.5, 2)),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomVerticalFlip(),
-        transforms.RandomRotation(15, resample=False, expand=False, center=None),
-        transforms.ColorJitter(brightness=0, contrast=0.5, hue=0),
+        # transforms.RandomHorizontalFlip(),
+        # transforms.RandomRotation(15, resample=False, expand=False, center=None),
+        # transforms.ColorJitter(brightness=0, contrast=0.5, hue=0),
+        # transforms.RandomAffine(degrees=30,             # 旋转角度
+        #                         translate=(0, 0.2),     # 水平偏移
+        #                         scale=(0.9, 1),
+        #                         shear=(6, 9),           # 裁剪
+        #                         fillcolor=0),           # 图像外部填充颜色 int
+        transforms.Resize((300, 900)),
+        # transforms.Resize((224, 224)),
+
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
@@ -208,8 +220,10 @@ if __name__ == '__main__':
     print('kfold_result:\n', kfold_score)
     print('kfold describe:\n', kfold_score.describe())
 
-    # f = plot_pd(train_score, val_score)
-    # save_dir = os.path.join(os.path.join('./result', opt.date), 'main3.2')
-    # plt.savefig(os.path.join(save_dir, 'figure.png'))
+    f = plot_pd(train_score, val_score)
+    save_dir = os.path.join(os.path.join('./result', opt.date), 'main3.2')
+    plt.savefig(os.path.join(save_dir, 'figure.png'))
 
     print("\nEnd time:", time.asctime(time.localtime(time.time())))
+    h, m, s = s2t(time.time() - start_time)
+    print("Using Time: %02dh %02dm %02ds" % (h, m, s))
