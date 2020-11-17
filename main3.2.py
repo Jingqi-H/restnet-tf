@@ -66,7 +66,7 @@ def cross_valid(
             p.requires_grad = False
             optim_param.append(p)
         for p in net.layer3.parameters():  # 将fine-tuning 的参数的 requires_grad 设置为 True
-            p.requires_grad = False
+            p.requires_grad = True
             optim_param.append(p)
         for p in net.layer4.parameters():  # 将fine-tuning 的参数的 requires_grad 设置为 True
             p.requires_grad = True
@@ -183,14 +183,13 @@ if __name__ == '__main__':
     print("start time:", time.asctime(time.localtime(time.time())))
     print('I am Tf3.2 with  on data with strip. / lr={} / wd={}.'.format(opt.lr, opt.weight_decay))
     data_transform = transforms.Compose([
-        # transforms.RandomHorizontalFlip(),
-        # transforms.RandomRotation(15, resample=False, expand=False, center=None),
-        # transforms.ColorJitter(brightness=0, contrast=0.5, hue=0),
-        # transforms.RandomAffine(degrees=30,             # 旋转角度
-        #                         translate=(0, 0.2),     # 水平偏移
-        #                         scale=(0.9, 1),
-        #                         shear=(6, 9),           # 裁剪
-        #                         fillcolor=0),           # 图像外部填充颜色 int
+        transforms.RandomHorizontalFlip(),
+        transforms.ColorJitter(brightness=0, contrast=0.5, hue=0),
+        transforms.RandomAffine(degrees=30,             # 旋转角度
+                                translate=(0, 0.2),     # 水平偏移
+                                scale=(0.9, 1),
+                                shear=(6, 9),           # 裁剪
+                                fillcolor=0),           # 图像外部填充颜色 int
         transforms.Resize((300, 900)),
         # transforms.Resize((224, 224)),
 
