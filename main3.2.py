@@ -66,7 +66,7 @@ def cross_valid(
             p.requires_grad = False
             optim_param.append(p)
         for p in net.layer3.parameters():  # 将fine-tuning 的参数的 requires_grad 设置为 True
-            p.requires_grad = True
+            p.requires_grad = False
             optim_param.append(p)
         for p in net.layer4.parameters():  # 将fine-tuning 的参数的 requires_grad 设置为 True
             p.requires_grad = True
