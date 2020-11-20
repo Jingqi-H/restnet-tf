@@ -12,9 +12,9 @@ def eval(net, loss_function, validation_loader):
             outputs = net(val_images.cuda())  # eval model only have last output layer
 
             pred_prob, pred_label = pred_prob2pred_label(outputs)
-            print('val_labels:', val_labels)
-            print('pred_label:', pred_label)
-            print('pred_prob:\n', pred_prob)
+            # print('val_labels:', val_labels)
+            # print('pred_label:', pred_label)
+            # print('pred_prob:\n', pred_prob)
             # print('outputs from network:\n', outputs)
 
             pred_label_all.append(pred_label)
@@ -30,8 +30,6 @@ def eval(net, loss_function, validation_loader):
 
         loss_ave = np.mean(running_loss)
 
-        # print('pred_prob_all', pred_prob_all,
-        #       '\npred_label_all', pred_label_all)
-
-        acc, recall, precision, auc, f1 = metrics_score(gt_labels, pred_label_all)
-    return loss_ave, acc, recall, precision, auc, f1
+        # acc, recall, precision, auc, f1 = metrics_score(gt_labels, pred_label_all)
+    # return loss_ave, acc, recall, precision, auc, f1
+    return loss_ave, pred_prob_all, pred_label_all, gt_labels

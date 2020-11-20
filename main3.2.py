@@ -20,9 +20,12 @@ import matplotlib.pyplot as plt
 from train import train
 from config import configs
 from models.model import resnet34, resnet101
+from sklearn.metrics import roc_curve, confusion_matrix
 from utils.util import gain_index, mkfile, s2t
-from utils.visulization import plot_pd
+from utils.metrics import pred_prob2pred_label, metrics_score
+from utils.visulization import plot_trainval_lossacc, plot_confusion_matrix, plot_roc, plot_lr
 from validate import eval
+from dataset.augumentation import AddPepperNoise
 
 
 def cross_valid(
@@ -35,6 +38,11 @@ def cross_valid(
         learning_rate,
         weight_decay,
         model_weight_path):
+    save_display_dir = os.path.join(os.path.join('./result', date), 'display')
+    mkfile(save_display_dir)
+    save_csv_dir = os.path.join(os.path.join('./result', date), 'main3.2')
+    mkfile(save_csv_dir)
+
     total_size = len(dataset)
     fraction = 1 / k_fold
     seg = int(total_size * fraction)
@@ -88,16 +96,16 @@ def cross_valid(
 
         ################################################################
 
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss().cuda()
 
-        # optimizers = optim.SGD(net.parameters(),
-        #                        lr=learning_rate,
-        #                        momentum=0.9,
-        #                        dampening=0,  # 动量的抑制因子，默认为0
-        #                        weight_decay=weight_decay,  # 默认为0，有值说明用作正则化
-        #                        nesterov=True, )  # 使用Nesterov动量，默认为False
+        optimizer = optim.SGD(optim_param,
+                              lr=learning_rate,
+                              momentum=0.9,
+                              dampening=0,  # 动量的抑制因子，默认为0
+                              weight_decay=weight_decay,  # 默认为0，有值说明用作正则化
+                              nesterov=True, )  # 使用Nesterov动量，默认为False
 
-        optimizers = optim.Adam(optim_param, lr=learning_rate, weight_decay=weight_decay)
+        # optimizer = optim.Adam(optim_param, lr=learning_rate, weight_decay=weight_decay)
         # scheduler = optim.lr_scheduler.StepLR(optimizers, step_size=100, gamma=0.8)
 
         train_result = pd.DataFrame(columns=('Loss', 'Accurate'))
@@ -124,25 +132,30 @@ def cross_valid(
                                             sampler=valid_sampler,
                                             drop_last=True,
                                             num_workers=4)
-
+        lr_epoch = []
         for epoch in range(num_epoch):
             print('\nF{} | Epoch {}/{}'.format(i + 1, epoch + 1, num_epoch))
 
             net.train()
-            train_loss, train_acc = train(net=net,
-                                          train_loader=train_loader,
-                                          train_num=train_len,
-                                          loss_function=criterion,
-                                          optimizer=optimizers)
+            train_loss, train_acc, lr = train(net=net,
+                                              base_lr=learning_rate,
+                                              epoch=epoch,
+                                              num_epoch=num_epoch,
+                                              train_num=train_len,
+                                              train_loader=train_loader,
+                                              loss_function=criterion,
+                                              optimizer=optimizer)
+            lr_epoch += lr
 
             # 保存结果到DataFrame里面
             train_result = train_result.append(pd.DataFrame({'Loss': [train_loss],
                                                              'Accurate': [train_acc]}), ignore_index=True)
 
             net.eval()
-            val_loss, val_acc, recall, precision, auc, f1 = eval(net=net,
-                                                                 loss_function=criterion,
-                                                                 validation_loader=validation_loader)
+            val_loss, pred_prob, pred_labels, gt_labels = eval(net=net,
+                                                               loss_function=criterion,
+                                                               validation_loader=validation_loader)
+            val_acc, recall, precision, auc, f1 = metrics_score(gt_labels, pred_labels)
 
             print('train_loss:{} | train_acc:{}'.format(train_loss, train_acc))
             print('val_loss:{} | val_acc:{}'.format(val_loss, val_acc))
@@ -159,20 +172,28 @@ def cross_valid(
                            os.path.join(save_model, 'K' + str(i + 1) + 'CP' + str(epoch + 1) + '.pth'))
                 print("Save epoch {}!".format(epoch + 1))
 
+                # 画ROC曲线
+                plot_roc(i + 1, pred_prob, gt_labels, save_display_dir, epoch + 1)
+                # 画混淆曲线
+                cm = confusion_matrix(gt_labels, pred_labels, labels=None, sample_weight=None)
+                plot_confusion_matrix(i + 1, cm, save_display_dir, epoch + 1, title='Confusion matrix')
+
+        plot_lr(lr_epoch)
+        lr_name = 'K' + str(i+1) + '_lr' + '.png'
+        plt.savefig(os.path.join(save_display_dir, lr_name))
+
         kfold_result = kfold_result.append(pd.DataFrame({'Accurate': [val_acc],
                                                          'Recall': [recall],
                                                          'Precision': [precision],
                                                          'AUC': [auc],
                                                          'F1': [f1]}), ignore_index=True)
 
-        save_dir = os.path.join(os.path.join('./result', date), 'main3.2')
-        mkfile(save_dir)
         train_file_name = 'K' + str(i + 1) + 'TrainScore.csv'
         val_file_name = 'K' + str(i + 1) + 'ValScore.csv'
 
-        train_result.to_csv(os.path.join(save_dir, train_file_name))
-        val_result.to_csv(os.path.join(save_dir, val_file_name))
-    kfold_result.to_csv(os.path.join(save_dir, 'KfoldScore.csv'))
+        train_result.to_csv(os.path.join(save_csv_dir, train_file_name))
+        val_result.to_csv(os.path.join(save_csv_dir, val_file_name))
+    kfold_result.to_csv(os.path.join(save_csv_dir, 'KfoldScore.csv'))
 
     return train_result, val_result, kfold_result
 
@@ -183,16 +204,15 @@ if __name__ == '__main__':
     print("start time:", time.asctime(time.localtime(time.time())))
     print('I am Tf3.2 with  on data with strip. / lr={} / wd={}.'.format(opt.lr, opt.weight_decay))
     data_transform = transforms.Compose([
-        transforms.RandomHorizontalFlip(),
-        transforms.ColorJitter(brightness=0, contrast=0.5, hue=0),
-        transforms.RandomAffine(degrees=30,             # 旋转角度
-                                translate=(0, 0.2),     # 水平偏移
-                                scale=(0.9, 1),
-                                shear=(6, 9),           # 裁剪
-                                fillcolor=0),           # 图像外部填充颜色 int
-        transforms.Resize((300, 900)),
-        # transforms.Resize((224, 224)),
-
+        # transforms.RandomHorizontalFlip(),
+        # transforms.ColorJitter(brightness=0, contrast=0.5, hue=0),
+        # transforms.RandomAffine(degrees=10,  # 旋转角度
+        #                         translate=(0, 0.2),  # 水平偏移
+        #                         scale=(0.9, 1),
+        #                         shear=(6, 9),  # 裁剪
+        #                         fillcolor=0),  # 图像外部填充颜色 int
+        transforms.Resize((256, 512)),
+        # AddPepperNoise(0.98, p=0.5),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
@@ -219,9 +239,8 @@ if __name__ == '__main__':
     print('kfold_result:\n', kfold_score)
     print('kfold describe:\n', kfold_score.describe())
 
-    f = plot_pd(train_score, val_score)
-    save_dir = os.path.join(os.path.join('./result', opt.date), 'main3.2')
-    plt.savefig(os.path.join(save_dir, 'figure.png'))
+    figure = plot_trainval_lossacc('./result/' + opt.date + '/main3.2')
+    plt.savefig(os.path.join('./result/' + opt.date + '/display', 'trainval_lossacc.png'))
 
     print("\nEnd time:", time.asctime(time.localtime(time.time())))
     h, m, s = s2t(time.time() - start_time)
