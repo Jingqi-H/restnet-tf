@@ -34,7 +34,36 @@ def plot_lr(lr_list):
 
 
 
+def plot_dataframe(train_file, val_file):
+    """
+    一张画布上有两个图，
+    :param train_file:
+    :param val_file:
+    :return:
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(15, 5))
+    ax1 = axes[0]
+    ax2 = axes[1]
 
+    # “.loc[:3000]”可以删掉，这个是用来限制行数的
+    ax1.plot(train_file['Accurate'].loc[:3000], '-', label='train')
+    ax1.plot(val_file['Accurate'].loc[:3000], '--', label='val')
+    ax1.set_xlabel('Epoch', fontsize=15)
+    ax1.set_ylabel('Accurate', fontsize=15)
+    # ax1.legend('train', fontsize=15)
+    ax1.grid(linestyle=":")
+    ax1.tick_params(labelsize=12)
+
+    ax2.plot(train_file['Loss'].loc[:3000], '-', label='train')
+    ax2.plot(val_file['Loss'].loc[:3000], '--', label='val')
+    ax2.set_xlabel('Epoch', fontsize=15)
+    ax2.set_ylabel('Loss', fontsize=15)
+    # ax2.legend(legend_train, fontsize=15)
+    ax2.grid(linestyle=":")
+    ax2.tick_params(labelsize=12)
+    # plt.show()
+
+    return fig
 
 
 def plot_trainval_lossacc(dir_main32_root):
@@ -269,7 +298,7 @@ def plot_pd(train_df, val_df):
 
 if __name__ == '__main__':
     dir_main32_root = '/home/huangjq/PyCharmCode/4_project/6_ResNet/5_ResNetTF34/result/1118Lr1e-5_Sgd/main3.2'
-    figure = polt_trainval_lossacc(dir_main32_root)
+    figure = plot_trainval_lossacc(dir_main32_root)
 
     # save_dir = os.path.join(os.path.join('./result', opt.date), 'main321')
     save_dir = os.path.join(os.path.join('./result', 'demo'), 'main321')

@@ -16,4 +16,5 @@ class configs(object):
     model_weight_path = "/home/huangjq/PyCharmCode/4_project/frequently_used/pretrained_model/resnet34-pre.pth"
 
     # 判断是否要在自己训练好的网络上继续训练，k=3折，每次都要拿对应折的网络接着训练，随机种子也必须一致
+
     pre_tained_model = '/home/huangjq/PycharmProjects/5_ResNetTF34/pretained_model/from60-1118Lr1e-5_Sgd'

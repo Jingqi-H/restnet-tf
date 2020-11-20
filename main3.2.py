@@ -23,7 +23,7 @@ from models.model import resnet34, resnet101
 from sklearn.metrics import roc_curve, confusion_matrix
 from utils.util import gain_index, mkfile, s2t
 from utils.metrics import pred_prob2pred_label, metrics_score
-from utils.visulization import plot_trainval_lossacc, plot_confusion_matrix, plot_roc, plot_lr
+from utils.visulization import plot_trainval_lossacc, plot_confusion_matrix, plot_roc, plot_lr, plot_dataframe
 from validate import eval
 from dataset.augumentation import AddPepperNoise
 
@@ -37,7 +37,10 @@ def cross_valid(
         num_classes,
         learning_rate,
         weight_decay,
-        model_weight_path):
+        resnet_model_path,
+        pre_model_path,
+        seed,
+        pre_tained):
     save_display_dir = os.path.join(os.path.join('./result', date), 'display')
     mkfile(save_display_dir)
     save_csv_dir = os.path.join(os.path.join('./result', date), 'main3.2')
@@ -53,7 +56,7 @@ def cross_valid(
     indices = list(range(dataset_size))
     # print(indices)
     if shuffle_dataset:
-        np.random.seed(42)
+        np.random.seed(seed)
         np.random.shuffle(indices)
     # print(indices)
     kfold_result = pd.DataFrame(columns=('Accurate', 'Recall', 'Precision', 'AUC', 'F1'))
@@ -64,6 +67,12 @@ def cross_valid(
     for i in range(k_fold):
 
         ################# 用迁移学习，改这个模块 ########################
+        if pre_tained:
+            model_weight_path = os.path.join(pre_model_path, 'K' + str(i+1) + 'CP1000.pth')
+        else:
+            model_weight_path = resnet_model_path
+        print('pre-tained model root:', model_weight_path)
+
         optim_param = []
         net = resnet34()
         missing_keys, unexpected_keys = net.load_state_dict(torch.load(model_weight_path), strict=False)
@@ -182,6 +191,10 @@ def cross_valid(
         lr_name = 'K' + str(i+1) + '_lr' + '.png'
         plt.savefig(os.path.join(save_display_dir, lr_name))
 
+        acc_loss_name = 'K' + str(i + 1) + '_acc-loss' + '.png'
+        f = plot_dataframe(train_result, val_result)
+        plt.savefig(os.path.join(save_display_dir, acc_loss_name))
+
         kfold_result = kfold_result.append(pd.DataFrame({'Accurate': [val_acc],
                                                          'Recall': [recall],
                                                          'Precision': [precision],
@@ -204,15 +217,15 @@ if __name__ == '__main__':
     print("start time:", time.asctime(time.localtime(time.time())))
     print('I am Tf3.2 with  on data with strip. / lr={} / wd={}.'.format(opt.lr, opt.weight_decay))
     data_transform = transforms.Compose([
-        # transforms.RandomHorizontalFlip(),
-        # transforms.ColorJitter(brightness=0, contrast=0.5, hue=0),
-        # transforms.RandomAffine(degrees=10,  # 旋转角度
-        #                         translate=(0, 0.2),  # 水平偏移
-        #                         scale=(0.9, 1),
-        #                         shear=(6, 9),  # 裁剪
-        #                         fillcolor=0),  # 图像外部填充颜色 int
+        transforms.RandomHorizontalFlip(),
+        transforms.ColorJitter(brightness=0, contrast=0.5, hue=0),
+        transforms.RandomAffine(degrees=10,  # 旋转角度
+                                translate=(0, 0.2),  # 水平偏移
+                                scale=(0.9, 1),
+                                shear=(6, 9),  # 裁剪
+                                fillcolor=0),  # 图像外部填充颜色 int
         transforms.Resize((256, 512)),
-        # AddPepperNoise(0.98, p=0.5),
+        AddPepperNoise(0.98, p=0.5),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
@@ -228,8 +241,10 @@ if __name__ == '__main__':
                                                       num_classes=opt.num_classes,
                                                       learning_rate=opt.lr,
                                                       weight_decay=opt.weight_decay,
-                                                      model_weight_path=opt.model_weight_path)
-
+                                                      resnet_model_path=opt.model_weight_path,
+                                                      pre_model_path=opt.pre_tained_model,
+                                                      seed=opt.seed,
+                                                      pre_tained=opt.pre_tained)
     # 只是print出第k折的结果
     print('train_result:\n', train_score)
     print('train describe:\n', train_score.describe())
