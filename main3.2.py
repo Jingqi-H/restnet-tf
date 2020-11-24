@@ -25,6 +25,7 @@ from utils.util import gain_index, mkfile, s2t
 from utils.metrics import pred_prob2pred_label, metrics_score
 from utils.visulization import plot_trainval_lossacc, plot_confusion_matrix, plot_roc, plot_lr, plot_dataframe
 from validate import eval
+from dataset.dataset import CustomImageFolder
 from dataset.augumentation import AddPepperNoise
 
 
@@ -68,7 +69,7 @@ def cross_valid(
 
         ################# 用迁移学习，改这个模块 ########################
         if pre_tained:
-            model_weight_path = os.path.join(pre_model_path, 'K' + str(i+1) + 'CP1000.pth')
+            model_weight_path = os.path.join(pre_model_path, 'K' + str(i+1) + 'CP2000.pth')
         else:
             model_weight_path = resnet_model_path
         print('pre-tained model root:', model_weight_path)
@@ -161,10 +162,11 @@ def cross_valid(
                                                              'Accurate': [train_acc]}), ignore_index=True)
 
             net.eval()
-            val_loss, pred_prob, pred_labels, gt_labels = eval(net=net,
+            val_loss, pred_prob, pred_labels, gt_labels, val_names = eval(net=net,
                                                                loss_function=criterion,
                                                                validation_loader=validation_loader)
             val_acc, recall, precision, auc, f1 = metrics_score(gt_labels, pred_labels)
+
 
             print('train_loss:{} | train_acc:{}'.format(train_loss, train_acc))
             print('val_loss:{} | val_acc:{}'.format(val_loss, val_acc))
@@ -186,6 +188,15 @@ def cross_valid(
                 # 画混淆曲线
                 cm = confusion_matrix(gt_labels, pred_labels, labels=None, sample_weight=None)
                 plot_confusion_matrix(i + 1, cm, save_display_dir, epoch + 1, title='Confusion matrix')
+
+                # 将list转为DataFrame
+                val_img_index = pd.DataFrame({
+                    'img_name': val_names,
+                    'gt_index': gt_labels,
+                    'pred_index': pred_labels
+                })
+                val_img_index.to_csv(os.path.join(save_csv_dir, 'K' + str(i+1) + 'CP' + str(epoch+1) + 'val_img_index.csv'))
+
 
         plot_lr(lr_epoch)
         lr_name = 'K' + str(i+1) + '_lr' + '.png'
@@ -217,21 +228,23 @@ if __name__ == '__main__':
     print("start time:", time.asctime(time.localtime(time.time())))
     print('I am Tf3.2 with  on data with strip. / lr={} / wd={}.'.format(opt.lr, opt.weight_decay))
     data_transform = transforms.Compose([
-        transforms.RandomHorizontalFlip(),
-        transforms.ColorJitter(brightness=0, contrast=0.5, hue=0),
-        transforms.RandomAffine(degrees=10,  # 旋转角度
-                                translate=(0, 0.2),  # 水平偏移
-                                scale=(0.9, 1),
-                                shear=(6, 9),  # 裁剪
-                                fillcolor=0),  # 图像外部填充颜色 int
+        # transforms.ColorJitter(brightness=0, contrast=0.5, hue=0),
+        # transforms.RandomAffine(degrees=10,  # 旋转角度
+        #                         translate=(0, 0.2),  # 水平偏移
+        #                         scale=(0.9, 1),
+        #                         shear=(6, 9),  # 裁剪
+        #                         fillcolor=0),  # 图像外部填充颜色 int
+        # transforms.RandomHorizontalFlip(),
+        # AddPepperNoise(0.98, p=0.5),
         transforms.Resize((256, 512)),
-        AddPepperNoise(0.98, p=0.5),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 
-    datasets = datasets.ImageFolder(root=opt.data_path_train,
-                                    transform=data_transform)
+    # datasets = datasets.ImageFolder(root=opt.data_path_train,
+    #                                 transform=data_transform)
+    datasets = CustomImageFolder(root=opt.data_path_train,
+                                 transform=data_transform)
 
     train_score, val_score, kfold_score = cross_valid(date=opt.date,
                                                       num_epoch=opt.num_epoch,

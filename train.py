@@ -31,7 +31,7 @@ def train(net,
     # lr_power = 0.9
 
     for step, data in enumerate(train_loader, start=0):
-        images, labels = data
+        images, labels, names = data
 
         current_idx = epoch * len(train_loader) + step
         optimizer.zero_grad()
@@ -50,7 +50,7 @@ def train(net,
         running_loss.append(loss.item())
 
         # print('current_idx={} | lr={}'.format(current_idx, lr))
-    print('lr=', lr)
+    # print('lr=', lr)
     loss_ave = np.mean(running_loss)
     train_ave = acc / train_num
     return loss_ave, train_ave, lr_list
