@@ -1,6 +1,6 @@
 """
-这个main3.2.py文件，用的是迁移学习方法三中的，加载预训练模型，冻结了stage1，训练其他参数
-还改了优化器的传参
+这个main3.2.1.py文件，用的是迁移学习方法三中的，加载预训练模型，冻结了stage12，训练其他参数
+还改了优化器的传参,优化器使用sgd
 
 有数据增强，加了dropout
 
@@ -19,14 +19,14 @@ import time
 import json
 import matplotlib.pyplot as plt
 from train import train
-from config import configs
+from config321 import configs
+from dataset.dataset import CustomImageFolder
 from models.model import resnet34, resnet101
 from sklearn.metrics import roc_curve, confusion_matrix
 from utils.util import gain_index, mkfile, s2t
 from utils.metrics import pred_prob2pred_label, metrics_score
-from utils.visulization import plot_trainval_lossacc, plot_confusion_matrix, plot_roc, plot_lr, plot_dataframe
+from utils.visulization import plot_dataframe, plot_lr, plot_trainval_lossacc, plot_confusion_matrix, plot_roc
 from validate import eval
-from dataset.dataset import CustomImageFolder
 from dataset.augumentation import AddPepperNoise
 
 
@@ -45,8 +45,10 @@ def cross_valid(
         pre_tained):
     save_display_dir = os.path.join(os.path.join('./result', date), 'display')
     mkfile(save_display_dir)
-    save_csv_dir = os.path.join(os.path.join('./result', date), 'main3.2')
+    save_csv_dir = os.path.join(os.path.join('./result', date), 'main321')
     mkfile(save_csv_dir)
+    save_model = os.path.join('checkpoints', date)
+    mkfile(save_model)
 
     total_size = len(dataset)
     fraction = 1 / k_fold
@@ -63,14 +65,11 @@ def cross_valid(
     # print(indices)
     kfold_result = pd.DataFrame(columns=('Accurate', 'Recall', 'Precision', 'AUC', 'F1'))
 
-    save_model = os.path.join('checkpoints', date)
-    mkfile(save_model)
-
     for i in range(k_fold):
 
         ################# 用迁移学习，改这个模块 ########################
         if pre_tained:
-            model_weight_path = os.path.join(pre_model_path, 'K' + str(i+1) + 'CP2000.pth')
+            model_weight_path = os.path.join(pre_model_path, 'K' + str(i+1) + 'CP1000.pth')
         else:
             model_weight_path = resnet_model_path
         print('pre-tained model root:', model_weight_path)
@@ -78,6 +77,7 @@ def cross_valid(
         optim_param = []
         net = resnet34()
         missing_keys, unexpected_keys = net.load_state_dict(torch.load(model_weight_path), strict=False)
+
         for param in net.layer1.parameters():
             param.requires_grad = False
 
@@ -169,7 +169,6 @@ def cross_valid(
                                                                validation_loader=validation_loader)
             val_acc, recall, precision, auc, f1 = metrics_score(gt_labels, pred_labels)
 
-
             print('train_loss:{} | train_acc:{}'.format(train_loss, train_acc))
             print('val_loss:{} | val_acc:{}'.format(val_loss, val_acc))
             # 保存结果到DataFrame里面
@@ -181,15 +180,17 @@ def cross_valid(
                                                          'F1': [f1]}), ignore_index=True)
 
             if (epoch + 1) % 500 == 0:
+                # 保存模型
                 torch.save(net.state_dict(),
                            os.path.join(save_model, 'K' + str(i + 1) + 'CP' + str(epoch + 1) + '.pth'))
-                print("Save epoch {}!".format(epoch + 1))
 
                 # 画ROC曲线
                 plot_roc(i + 1, pred_prob, gt_labels, save_display_dir, epoch + 1)
                 # 画混淆曲线
                 cm = confusion_matrix(gt_labels, pred_labels, labels=None, sample_weight=None)
                 plot_confusion_matrix(i + 1, cm, save_display_dir, epoch + 1, title='Confusion matrix')
+
+                print("Save epoch {}!".format(epoch + 1))
 
                 # 将list转为DataFrame
                 val_img_index = pd.DataFrame({
@@ -201,12 +202,15 @@ def cross_valid(
 
 
         plot_lr(lr_epoch)
-        lr_name = 'K' + str(i+1) + '_lr' + '.png'
+        lr_name = 'K' + str(i + 1) + '_lr' + '.png'
         plt.savefig(os.path.join(save_display_dir, lr_name))
 
         acc_loss_name = 'K' + str(i + 1) + '_acc-loss' + '.png'
         f = plot_dataframe(train_result, val_result)
         plt.savefig(os.path.join(save_display_dir, acc_loss_name))
+
+
+
 
         kfold_result = kfold_result.append(pd.DataFrame({'Accurate': [val_acc],
                                                          'Recall': [recall],
@@ -226,17 +230,18 @@ def cross_valid(
 
 if __name__ == '__main__':
     opt = configs()
+
     start_time = time.time()
     print("start time:", time.asctime(time.localtime(time.time())))
-    print('I am Tf3.2 with  on data with strip. / lr={} / wd={}.'.format(opt.lr, opt.weight_decay))
+    print('I am Tf321 with  on data with strip. / lr={} / wd={}.'.format(opt.lr, opt.weight_decay))
     data_transform = transforms.Compose([
         # transforms.ColorJitter(brightness=0, contrast=0.5, hue=0),
-        # transforms.RandomAffine(degrees=10,  # 旋转角度
-        #                         translate=(0, 0.2),  # 水平偏移
+        # transforms.RandomAffine(degrees=10,             # 旋转角度
+        #                         translate=(0, 0.2),     # 水平偏移
         #                         scale=(0.9, 1),
-        #                         shear=(6, 9),  # 裁剪
-        #                         fillcolor=0),  # 图像外部填充颜色 int
-        transforms.RandomHorizontalFlip(),
+        #                         shear=(6, 9),           # 裁剪
+        #                         fillcolor=0),           # 图像外部填充颜色 int
+        # transforms.RandomHorizontalFlip(),
         # AddPepperNoise(0.95, p=0.5),
         transforms.Resize((256, 512)),
         transforms.ToTensor(),
@@ -245,6 +250,7 @@ if __name__ == '__main__':
 
     # datasets = datasets.ImageFolder(root=opt.data_path_train,
     #                                 transform=data_transform)
+
     datasets = CustomImageFolder(root=opt.data_path_train,
                                  transform=data_transform)
 
@@ -255,8 +261,6 @@ if __name__ == '__main__':
     json_str = json.dumps(cla_dict, indent=4)
     with open('class_indices.json', 'w') as json_file:
         json_file.write(json_str)
-
-
 
     train_score, val_score, kfold_score = cross_valid(date=opt.date,
                                                       num_epoch=opt.num_epoch,
@@ -270,16 +274,17 @@ if __name__ == '__main__':
                                                       pre_model_path=opt.pre_tained_model,
                                                       seed=opt.seed,
                                                       pre_tained=opt.pre_tained)
+
     # 只是print出第k折的结果
     print('train_result:\n', train_score)
-    print('train describe:\n', train_score.describe())
+    # print('train describe:\n', train_score.describe())
     print('val_result:\n', val_score)
-    print('val describe:\n', val_score.describe())
+    # print('val describe:\n', val_score.describe())
     # 存了k折每一折的最后一个epoch的平均准确率
     print('kfold_result:\n', kfold_score)
     print('kfold describe:\n', kfold_score.describe())
 
-    figure = plot_trainval_lossacc('./result/' + opt.date + '/main3.2')
+    figure = plot_trainval_lossacc('./result/' + opt.date + '/main321')
     plt.savefig(os.path.join('./result/' + opt.date + '/display', 'trainval_lossacc.png'))
 
     print("\nEnd time:", time.asctime(time.localtime(time.time())))
