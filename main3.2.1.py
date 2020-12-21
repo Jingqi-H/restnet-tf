@@ -131,7 +131,8 @@ def cross_valid(
         valid_sampler = DATA.sampler.SubsetRandomSampler(val_indices)
 
         train_len, val_len = len(train_sampler), len(valid_sampler)
-        print(train_len, val_len)
+        # print(train_len, val_len)
+        print("train data: {} | val data: {}".format(train_len, val_len))
         print()
 
         train_loader = DATA.DataLoader(dataset,
@@ -241,8 +242,8 @@ if __name__ == '__main__':
         #                         scale=(0.9, 1),
         #                         shear=(6, 9),           # 裁剪
         #                         fillcolor=0),           # 图像外部填充颜色 int
-        # transforms.RandomHorizontalFlip(),
-        # AddPepperNoise(0.95, p=0.5),
+        transforms.RandomHorizontalFlip(),
+        AddPepperNoise(0.95, p=0.5),
         transforms.Resize((256, 512)),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])

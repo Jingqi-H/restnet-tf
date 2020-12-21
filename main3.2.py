@@ -70,7 +70,7 @@ def cross_valid(
 
         ################# 用迁移学习，改这个模块 ########################
         if pre_tained:
-            model_weight_path = os.path.join(pre_model_path, 'K' + str(i+1) + 'CP2000.pth')
+            model_weight_path = os.path.join(pre_model_path, 'K' + str(i+1) + 'CP3000.pth')
         else:
             model_weight_path = resnet_model_path
         print('pre-tained model root:', model_weight_path)
@@ -131,7 +131,8 @@ def cross_valid(
         valid_sampler = DATA.sampler.SubsetRandomSampler(val_indices)
 
         train_len, val_len = len(train_sampler), len(valid_sampler)
-        print(train_len, val_len)
+        # print(train_len, val_len)
+        print("train data: {} | val data: {}".format(train_len, val_len))
         print()
 
         train_loader = DATA.DataLoader(dataset,
@@ -236,7 +237,7 @@ if __name__ == '__main__':
         #                         scale=(0.9, 1),
         #                         shear=(6, 9),  # 裁剪
         #                         fillcolor=0),  # 图像外部填充颜色 int
-        transforms.RandomHorizontalFlip(),
+        # transforms.RandomHorizontalFlip(),
         # AddPepperNoise(0.95, p=0.5),
         transforms.Resize((256, 512)),
         transforms.ToTensor(),
